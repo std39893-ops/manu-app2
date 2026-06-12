@@ -1,0 +1,1739 @@
+<!doctype html>
+<html lang="th" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Manu">
+  <meta name="theme-color" content="#534AB7">
+  <title>Manu — แปลภาษามืออัจฉริยะ</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#534AB7',
+            'primary-light': '#7B73D1',
+            'primary-dark': '#3D3589',
+            surface: '#F8F7FF',
+            card: '#FFFFFF',
+            muted: '#6B7280'
+          },
+          fontFamily: {
+            sans: ['Noto Sans Thai', 'Sarabun', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { height: 100%; height: -webkit-fill-available; margin: 0; background: #F8F7FF; }
+    body { 
+      height: 100%; 
+      height: 100dvh;
+      margin: 0; 
+      background: #F8F7FF;
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .app-wrapper { 
+      height: 100%; 
+      height: 100dvh;
+      overflow: hidden; 
+    }
+    .tab-content { 
+      height: calc(100% - 68px - env(safe-area-inset-bottom)); 
+      overflow-y: auto; 
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab-content::-webkit-scrollbar { width: 0; }
+    
+    /* Safe area for bottom nav */
+    nav.flex-shrink-0 {
+      padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    
+    /* ป้องกัน text zoom บน iOS เมื่อ rotate */
+    input, select, textarea { font-size: 16px !important; }
+    
+    /* ป้องกัน double-tap zoom */
+    button, a { touch-action: manipulation; }
+
+    /* Animations */
+    @keyframes pulse-ring { 0%{transform:scale(0.9);opacity:1}100%{transform:scale(1.3);opacity:0} }
+    @keyframes scan-line { 0%{top:10%}100%{top:85%} }
+    @keyframes fadeInUp { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes slideDown { from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)} }
+    @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+    @keyframes ripple { 0%{transform:scale(0);opacity:.6}100%{transform:scale(4);opacity:0} }
+    @keyframes shimmer { 0%{background-position:-200% 0}100%{background-position:200% 0} }
+    @keyframes bounce-in { 0%{transform:scale(0.7);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1} }
+    @keyframes live-pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+
+    .scan-line { animation: scan-line 2s ease-in-out infinite alternate; }
+    .pulse-ring { animation: pulse-ring 1.5s ease-out infinite; }
+    .fade-in-up { animation: fadeInUp 0.35s ease both; }
+    .slide-down { animation: slideDown 0.3s ease both; }
+    .live-dot { animation: live-pulse 1.2s ease-in-out infinite; }
+    .shimmer-card {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+    }
+
+    .category-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; }
+    
+    /* Card hover */
+    .history-card { transition: all 0.2s ease; }
+    .history-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(83,74,183,0.1); }
+    
+    /* Custom scrollbar for filters */
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Tab active indicator */
+    .tab-btn.active { color: #534AB7; }
+    .tab-btn.active .tab-icon-wrap { background: rgba(83,74,183,0.12); }
+
+    /* Ripple button */
+    .ripple-btn { position: relative; overflow: hidden; }
+    .ripple-btn::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.35);
+      width: 10px; height: 10px;
+      transform: scale(0);
+      top: 50%; left: 50%;
+      margin: -5px 0 0 -5px;
+      pointer-events: none;
+    }
+    .ripple-btn:active::after { animation: ripple 0.4s ease-out; }
+
+    /* Modal */
+    .modal-overlay { backdrop-filter: blur(4px); background: rgba(0,0,0,0.45); }
+
+    /* Progress ring */
+    .progress-circle { transform: rotate(-90deg); }
+
+    /* Dark mode */
+    .dark-mode { background: #1a1625 !important; color: #e5e2ff; }
+    .dark-mode .bg-white { background: #2d2752 !important; }
+    .dark-mode .bg-surface, .dark-mode .bg-gray-50 { background: #1a1625 !important; }
+    .dark-mode .text-gray-900 { color: #e5e2ff !important; }
+    .dark-mode .text-gray-700 { color: #b8b4d4 !important; }
+    .dark-mode .border-gray-100, .dark-mode .border-gray-200 { border-color: #3d3769 !important; }
+    .dark-mode .bg-gray-100 { background: #3d3769 !important; }
+    .dark-mode .text-gray-400 { color: #7a75a8 !important; }
+    .dark-mode nav.bg-white { background: #2d2752 !important; border-color: #3d3769 !important; }
+
+    /* Confidence meter */
+    .confidence-bar { height: 4px; border-radius: 2px; background: #e5e7eb; }
+    .confidence-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #534AB7, #7B73D1); transition: width 0.6s ease; }
+
+    /* Quick phrase chip */
+    .phrase-chip { 
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 12px; border-radius: 20px;
+      background: white; border: 1.5px solid #e5e7eb;
+      font-size: 13px; cursor: pointer;
+      transition: all 0.15s ease; white-space: nowrap;
+    }
+    .phrase-chip:hover { border-color: #534AB7; color: #534AB7; background: rgba(83,74,183,0.05); }
+
+    /* Notification badge */
+    .notif-badge {
+      position: absolute; top: -3px; right: -3px;
+      background: #ef4444; color: white;
+      font-size: 9px; font-weight: 700;
+      width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid white;
+    }
+
+    /* Stats card gradient */
+    .stat-card-1 { background: linear-gradient(135deg, #534AB7 0%, #7B73D1 100%); }
+    .stat-card-2 { background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%); }
+    .stat-card-3 { background: linear-gradient(135deg, #10b981 0%, #34d399 100%); }
+
+    /* Favorite star */
+    .star-btn.starred { color: #f59e0b; }
+    .star-btn { color: #d1d5db; transition: color 0.2s, transform 0.2s; }
+    .star-btn:hover { transform: scale(1.2); }
+
+    /* DB status */
+    .db-status { font-size: 10px; display: flex; align-items: center; gap: 4px; }
+  </style>
+</head>
+<body class="h-full bg-surface font-sans" id="app-body">
+
+<div class="app-wrapper flex flex-col max-w-md mx-auto bg-surface relative" style="height:100%;height:100dvh;" id="app-root">
+
+  <!-- ===== AUTH CONTAINER ===== -->
+  <div id="auth-container" class="absolute inset-0 bg-surface z-50 flex flex-col justify-center px-6 gap-4">
+    
+    <!-- Login -->
+    <div id="sub-page-login" class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 fade-in-up">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
+          <span class="text-3xl">🤟</span>
+        </div>
+        <h1 class="text-xl font-bold text-gray-900">ยินดีต้อนรับสู่ Manu</h1>
+        <p class="text-xs text-muted mt-1">แอปพลิเคชันแปลภาษามืออัจฉริยะ</p>
+      </div>
+      <div class="space-y-3">
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base">📧</span>
+          <input type="text" id="login-username" placeholder="อีเมล / ชื่อผู้ใช้" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30">
+        </div>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base">🔒</span>
+          <input type="password" id="login-password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30">
+        </div>
+        <button onclick="handleLogin()" class="ripple-btn w-full py-3 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold text-sm transition shadow-sm">
+          เข้าสู่ระบบ
+        </button>
+      </div>
+      <p class="text-center text-xs text-muted mt-4">
+        ยังไม่มีบัญชี? <button onclick="toggleAuth('register')" class="text-primary font-semibold hover:underline">สมัครสมาชิก</button>
+      </p>
+      <!-- Quick demo -->
+      <div class="mt-3 p-3 bg-primary/5 rounded-xl border border-primary/10">
+        <p class="text-xs text-center text-muted mb-2">ทดลองใช้งานด่วน</p>
+        <button onclick="quickDemo()" class="w-full py-2 border border-primary/30 text-primary rounded-xl text-xs font-medium hover:bg-primary/5 transition">
+          🎯 เข้าสู่ระบบแบบ Demo
+        </button>
+      </div>
+    </div>
+
+    <!-- Register -->
+    <div id="sub-page-register" class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hidden fade-in-up">
+      <div class="text-center mb-5">
+        <h1 class="text-xl font-bold text-gray-900">สร้างบัญชีใหม่</h1>
+        <p class="text-xs text-muted mt-1">ร่วมเป็นส่วนหนึ่งของชุมชนภาษามือ</p>
+      </div>
+      <div class="space-y-3">
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base">👤</span>
+          <input type="text" id="reg-name" placeholder="ชื่อ-นามสกุล" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30">
+        </div>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base">📧</span>
+          <input type="email" id="reg-email" placeholder="อีเมล" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30">
+        </div>
+        <div class="relative">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base">🔒</span>
+          <input type="password" id="reg-password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/30">
+        </div>
+        <button onclick="handleRegister()" class="ripple-btn w-full py-3 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold text-sm transition shadow-sm">
+          สมัครสมาชิก
+        </button>
+      </div>
+      <p class="text-center text-xs text-muted mt-4">
+        มีบัญชีอยู่แล้ว? <button onclick="toggleAuth('login')" class="text-primary font-semibold hover:underline">เข้าสู่ระบบ</button>
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP ===== -->
+  <div id="main-app" class="h-full flex flex-col hidden">
+    
+    <!-- Tab Content -->
+    <div class="tab-content flex-1" id="tab-content">
+
+      <!-- PAGE: TRANSLATE -->
+      <div id="page-translate" class="h-full flex flex-col">
+        <!-- Camera View -->
+        <div class="relative bg-gray-900 overflow-hidden" style="height: 58%;">
+          
+          <!-- Video element (กล้องจริง) -->
+          <video id="cam-video" autoplay playsinline muted
+            class="absolute inset-0 w-full h-full object-cover"
+            style="display:none; transform:scaleX(-1);">
+          </video>
+          <!-- Canvas สำหรับ MediaPipe drawing -->
+          <canvas id="mediapipe-canvas" class="absolute inset-0 w-full h-full" style="display:none; pointer-events:none;"></canvas>
+
+          <!-- Fallback: แสดงเมื่อยังไม่เปิดกล้อง -->
+          <div id="cam-placeholder" class="absolute inset-0 bg-gradient-to-b from-gray-800 to-gray-900 flex flex-col items-center justify-center gap-3">
+            <div class="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+              <span class="text-3xl">📷</span>
+            </div>
+            <p class="text-white/80 text-sm font-medium">แตะเพื่อเปิดกล้อง</p>
+            <button onclick="startCamera()" class="px-5 py-2.5 bg-primary text-white rounded-full text-sm font-semibold ripple-btn">
+              เปิดกล้อง
+            </button>
+          </div>
+
+          <!-- Overlay เมื่อกล้องทำงาน -->
+          <div id="cam-overlay" class="absolute inset-0 pointer-events-none" style="display:none;">
+            <!-- กรอบ scan -->
+            <div class="absolute inset-0 flex items-center justify-center">
+              <div class="relative w-52 h-52">
+                <div class="absolute inset-0 border-2 border-primary/60 rounded-2xl"></div>
+                <div class="absolute -top-0.5 -left-0.5 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-lg"></div>
+                <div class="absolute -top-0.5 -right-0.5 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-lg"></div>
+                <div class="absolute -bottom-0.5 -left-0.5 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-lg"></div>
+                <div class="absolute -bottom-0.5 -right-0.5 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-lg"></div>
+                <div class="scan-line absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-primary-light to-transparent"></div>
+              </div>
+            </div>
+            <!-- Demo emoji overlay (จำลองผล AI) -->
+            <div class="absolute bottom-14 left-0 right-0 flex justify-center">
+              <div class="bg-black/40 backdrop-blur-sm rounded-full px-4 py-1.5 flex items-center gap-2">
+                <span class="text-2xl" id="cam-emoji">🤟</span>
+                <span class="text-white text-sm font-semibold" id="cam-label">กำลังวิเคราะห์...</span>
+              </div>
+            </div>
+            <!-- AI Status badge -->
+            <div id="ai-status-badge" class="absolute top-3 left-0 right-0 flex justify-center" style="display:none!important;">
+              <div class="bg-primary/80 backdrop-blur-sm rounded-full px-3 py-1 flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-white live-dot inline-block"></span>
+                <span class="text-white text-xs font-medium" id="ai-status-text">MediaPipe พร้อม</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top bar -->
+          <div class="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
+            <div class="flex items-center gap-2">
+              <span class="text-white font-bold text-lg">Manu</span>
+              <div id="live-badge" class="flex items-center gap-1 bg-green-500/80 text-white text-xs px-2 py-0.5 rounded-full" style="display:none!important;">
+                <span class="live-dot w-1.5 h-1.5 rounded-full bg-white inline-block"></span>
+                <span>LIVE</span>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button id="btn-flip-cam" onclick="flipCamera()" class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center" aria-label="กลับกล้อง" style="display:none;">
+                <span class="text-base">🔄</span>
+              </button>
+              <button id="btn-stop-cam" onclick="stopCamera()" class="w-9 h-9 rounded-full bg-red-500/70 flex items-center justify-center" aria-label="ปิดกล้อง" style="display:none;">
+                <span class="text-base">⏹️</span>
+              </button>
+              <button id="dark-toggle" onclick="toggleDark()" class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center" aria-label="โหมดมืด">
+                <span id="dark-icon" class="text-base">🌙</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Confidence -->
+          <div class="absolute left-4 right-4 z-10" style="bottom: 14px;">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-white/70 text-xs">ความมั่นใจ</span>
+              <span class="text-white text-xs font-bold" id="conf-pct">94%</span>
+            </div>
+            <div class="confidence-bar">
+              <div class="confidence-fill" id="conf-fill" style="width:94%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result Panel -->
+        <div class="flex-1 bg-white rounded-t-3xl -mt-3 relative z-10 shadow-lg flex flex-col overflow-hidden">
+          <!-- Current word display -->
+          <div class="px-5 pt-5 pb-3 text-center border-b border-gray-100">
+            <p class="text-2xl font-bold text-gray-900" id="result-th">สวัสดี</p>
+            <p class="text-sm text-muted mt-0.5" id="result-en">Hello · ทักทาย</p>
+          </div>
+          
+          <!-- Action buttons -->
+          <div class="flex justify-center gap-2 px-4 py-3">
+            <button onclick="speakWord()" class="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 transition ripple-btn" aria-label="พูดออกเสียง">
+              <span class="text-lg">🔊</span>
+              <span class="text-xs text-primary font-medium">พูด</span>
+            </button>
+            <button onclick="copyWord()" class="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 transition ripple-btn" aria-label="คัดลอก">
+              <span class="text-lg">📋</span>
+              <span class="text-xs text-primary font-medium">คัดลอก</span>
+            </button>
+            <button onclick="shareWord()" class="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 transition ripple-btn" aria-label="แชร์">
+              <span class="text-lg">↗️</span>
+              <span class="text-xs text-primary font-medium">แชร์</span>
+            </button>
+            <button onclick="saveCurrentWord()" class="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 transition ripple-btn" aria-label="บันทึก" id="btn-save-word">
+              <span class="text-lg">🔖</span>
+              <span class="text-xs text-primary font-medium">บันทึก</span>
+            </button>
+            <button onclick="addToFavorite()" class="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 transition ripple-btn" aria-label="รายการโปรด">
+              <span class="text-lg" id="fav-icon">⭐</span>
+              <span class="text-xs text-amber-600 font-medium">โปรด</span>
+            </button>
+            <button onclick="askClaudeAboutSign()" class="flex flex-col items-center gap-1 px-3 py-2 rounded-xl bg-violet-50 hover:bg-violet-100 transition ripple-btn" aria-label="ถาม AI">
+              <span class="text-lg">🤖</span>
+              <span class="text-xs text-violet-600 font-medium">ถาม AI</span>
+            </button>
+          </div>
+
+          <!-- Quick phrases -->
+          <div class="px-4 pb-4">
+            <p class="text-xs text-muted font-medium mb-2">คำที่ใช้บ่อย</p>
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+              <button class="phrase-chip" onclick="selectPhrase('สวัสดี','Hello','greeting')">👋 สวัสดี</button>
+              <button class="phrase-chip" onclick="selectPhrase('ขอบคุณ','Thank you','daily')">🙏 ขอบคุณ</button>
+              <button class="phrase-chip" onclick="selectPhrase('ช่วยด้วย','Help me','daily')">🆘 ช่วยด้วย</button>
+              <button class="phrase-chip" onclick="selectPhrase('ดีใจ','Happy','emotion')">😊 ดีใจ</button>
+              <button class="phrase-chip" onclick="selectPhrase('รัก','Love','emotion')">❤️ รัก</button>
+              <button class="phrase-chip" onclick="selectPhrase('ใช่ไหม?','Is that right?','question')">❓ ใช่ไหม?</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: HISTORY -->
+      <div id="page-history" class="h-full flex flex-col hidden">
+        <div class="px-5 pt-5 pb-3 bg-white border-b border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <h1 class="text-xl font-bold text-gray-900">ประวัติการแปล</h1>
+            <div class="flex gap-2 items-center">
+              <span class="db-status" id="db-status-history">
+                <span class="w-2 h-2 rounded-full bg-green-400 live-dot inline-block"></span>
+                <span class="text-muted">Real-time</span>
+              </span>
+              <button onclick="showClearConfirm()" class="text-xs text-red-500 bg-red-50 px-2 py-1 rounded-lg hover:bg-red-100 transition">ล้างทั้งหมด</button>
+            </div>
+          </div>
+          <!-- Search -->
+          <div class="relative mb-3">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm">🔍</span>
+            <input type="text" id="history-search" placeholder="ค้นหาคำ..." class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" oninput="onHistorySearch()">
+          </div>
+          <!-- Filters -->
+          <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1" id="history-filters">
+            <button class="category-badge bg-primary text-white whitespace-nowrap" data-filter="all" onclick="setHistoryFilter('all',this)">ทั้งหมด</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-filter="favorite" onclick="setHistoryFilter('favorite',this)">⭐ โปรด</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-filter="greeting" onclick="setHistoryFilter('greeting',this)">ทักทาย</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-filter="daily" onclick="setHistoryFilter('daily',this)">ประจำวัน</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-filter="emotion" onclick="setHistoryFilter('emotion',this)">อารมณ์</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-filter="question" onclick="setHistoryFilter('question',this)">คำถาม</button>
+          </div>
+        </div>
+        <!-- Stats bar -->
+        <div class="px-5 py-2 bg-white border-b border-gray-100 flex gap-4">
+          <span class="text-xs text-muted">ทั้งหมด: <strong class="text-gray-900" id="hist-total">0</strong> คำ</span>
+          <span class="text-xs text-muted">โปรด: <strong class="text-amber-600" id="hist-fav">0</strong> คำ</span>
+          <span class="text-xs text-muted">วันนี้: <strong class="text-primary" id="hist-today">0</strong> คำ</span>
+        </div>
+        <!-- List -->
+        <div class="flex-1 overflow-y-auto px-4 py-3 space-y-2" id="history-list"></div>
+      </div>
+
+      <!-- PAGE: DICTIONARY -->
+      <div id="page-dictionary" class="h-full flex flex-col hidden">
+        <div class="px-5 pt-5 pb-3 bg-white border-b border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <h1 class="text-xl font-bold text-gray-900">พจนานุกรมภาษามือ</h1>
+            <button onclick="showAddWordModal()" class="flex items-center gap-1 text-xs bg-primary text-white px-3 py-1.5 rounded-xl hover:bg-primary-dark transition">
+              <span>+</span> เพิ่มคำ
+            </button>
+          </div>
+          <div class="relative mb-3">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm">🔍</span>
+            <input type="text" id="dict-search" placeholder="ค้นหาท่ามือ..." class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" oninput="renderDict()">
+          </div>
+          <!-- Category filter -->
+          <div class="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1" id="dict-cat-filter">
+            <button class="category-badge bg-primary text-white whitespace-nowrap" data-cat="all" onclick="setDictCat('all',this)">ทั้งหมด</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-cat="greeting" onclick="setDictCat('greeting',this)">ทักทาย</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-cat="daily" onclick="setDictCat('daily',this)">ประจำวัน</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-cat="emotion" onclick="setDictCat('emotion',this)">อารมณ์</button>
+            <button class="category-badge bg-gray-100 text-gray-700 whitespace-nowrap" data-cat="question" onclick="setDictCat('question',this)">คำถาม</button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-y-auto px-4 py-3 space-y-2" id="dict-list"></div>
+      </div>
+
+      <!-- PAGE: PROFILE -->
+      <div id="page-profile" class="h-full overflow-y-auto hidden">
+        <div class="p-5">
+          <!-- Avatar -->
+          <div class="flex flex-col items-center mb-6">
+            <div class="relative">
+              <div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center mb-3 shadow-lg" id="profile-avatar">
+                <span class="text-3xl" id="profile-avatar-emoji">🤟</span>
+              </div>
+            </div>
+            <h2 class="text-lg font-bold text-gray-900" id="profile-name">ผู้ใช้งาน</h2>
+            <p class="text-xs text-muted" id="profile-email">demo@manu.app</p>
+            <p class="text-xs text-muted mt-0.5" id="profile-since">สมาชิกตั้งแต่ <span id="profile-join-date">วันนี้</span></p>
+          </div>
+
+          <!-- Stats -->
+          <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="stat-card-1 rounded-2xl p-3 text-center text-white shadow-sm">
+              <p class="text-2xl font-bold" id="stat-words">0</p>
+              <p class="text-xs opacity-80">คำที่แปล</p>
+            </div>
+            <div class="stat-card-2 rounded-2xl p-3 text-center text-white shadow-sm">
+              <p class="text-2xl font-bold" id="stat-streak">0</p>
+              <p class="text-xs opacity-80">วันติดต่อกัน</p>
+            </div>
+            <div class="stat-card-3 rounded-2xl p-3 text-center text-white shadow-sm">
+              <p class="text-2xl font-bold" id="stat-fav">0</p>
+              <p class="text-xs opacity-80">รายการโปรด</p>
+            </div>
+          </div>
+
+          <!-- DB Info -->
+          <div class="bg-white rounded-2xl p-4 mb-4 border border-gray-100 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-semibold text-gray-900">💾 ฐานข้อมูล Real-time</h3>
+              <span class="db-status">
+                <span class="w-2 h-2 rounded-full bg-green-400 live-dot inline-block"></span>
+                <span class="text-green-600 font-medium text-xs">ออนไลน์</span>
+              </span>
+            </div>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-muted text-xs">รายการในประวัติ</span>
+                <span class="font-semibold text-gray-900 text-xs" id="db-history-count">0 รายการ</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-muted text-xs">คำในพจนานุกรม</span>
+                <span class="font-semibold text-gray-900 text-xs" id="db-dict-count">0 คำ</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-muted text-xs">อัปเดตล่าสุด</span>
+                <span class="font-semibold text-gray-900 text-xs" id="db-last-update">—</span>
+              </div>
+            </div>
+            <button onclick="exportData()" class="mt-3 w-full py-2 border border-primary/30 text-primary rounded-xl text-xs font-medium hover:bg-primary/5 transition">
+              📤 ส่งออกข้อมูล (JSON)
+            </button>
+          </div>
+
+          <!-- Settings -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+            <button onclick="showLanguageModal()" class="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition border-b border-gray-100">
+              <div class="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center text-lg">🌐</div>
+              <span class="flex-1 text-left text-sm font-medium text-gray-900">ภาษาที่รองรับ</span>
+              <span class="text-muted text-xs">›</span>
+            </button>
+            <button onclick="showApiKeyModal()" class="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition border-b border-gray-100">
+              <div class="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center text-lg">🤖</div>
+              <span class="flex-1 text-left text-sm font-medium text-gray-900">Claude AI — API Key</span>
+              <span class="text-muted text-xs" id="api-key-status">ยังไม่ได้ตั้งค่า</span>
+            </button>
+            <button onclick="showNotifSettings()" class="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition border-b border-gray-100">
+              <div class="w-9 h-9 rounded-xl bg-yellow-100 flex items-center justify-center text-lg">🔔</div>
+              <span class="flex-1 text-left text-sm font-medium text-gray-900">การแจ้งเตือน</span>
+              <div class="w-10 h-5 rounded-full relative cursor-pointer" id="notif-toggle-bg" style="background:#534AB7;" onclick="toggleNotif(event)">
+                <div class="absolute w-4 h-4 rounded-full bg-white top-0.5 right-0.5 transition-all" id="notif-toggle-knob"></div>
+              </div>
+            </button>
+            <button class="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition border-b border-gray-100">
+              <div class="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center text-lg">♿</div>
+              <span class="flex-1 text-left text-sm font-medium text-gray-900">การเข้าถึง</span>
+              <span class="text-muted text-xs">›</span>
+            </button>
+            <button onclick="handleLogout()" class="w-full flex items-center gap-3 p-4 hover:bg-red-50 transition text-red-600">
+              <div class="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center text-lg">🚪</div>
+              <span class="flex-1 text-left text-sm font-medium">ออกจากระบบ</span>
+              <span class="text-red-300 text-xs">›</span>
+            </button>
+          </div>
+
+          <!-- App version -->
+          <p class="text-center text-xs text-muted pb-4">Manu v2.0 · Real-time Database Edition</p>
+        </div>
+      </div>
+
+    </div><!-- end tab-content -->
+
+    <!-- BOTTOM NAV -->
+    <nav class="flex-shrink-0 bg-white border-t border-gray-200 px-2 pb-2 pt-1" role="navigation">
+      <div class="flex justify-around">
+        <button class="tab-btn flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition relative" data-tab="translate" onclick="switchTab('translate')">
+          <div class="tab-icon-wrap w-8 h-6 flex items-center justify-center rounded-lg transition"><span class="text-base">🤟</span></div>
+          <span class="text-[10px] font-medium">แปล</span>
+        </button>
+        <button class="tab-btn flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition relative" data-tab="history" onclick="switchTab('history')">
+          <div class="tab-icon-wrap w-8 h-6 flex items-center justify-center rounded-lg transition relative">
+            <span class="text-base">🕐</span>
+            <span class="notif-badge hidden" id="history-badge">!</span>
+          </div>
+          <span class="text-[10px] font-medium">ประวัติ</span>
+        </button>
+        <button class="tab-btn flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition" data-tab="dictionary" onclick="switchTab('dictionary')">
+          <div class="tab-icon-wrap w-8 h-6 flex items-center justify-center rounded-lg transition"><span class="text-base">📖</span></div>
+          <span class="text-[10px] font-medium">พจนานุกรม</span>
+        </button>
+        <button class="tab-btn flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition" data-tab="profile" onclick="switchTab('profile')">
+          <div class="tab-icon-wrap w-8 h-6 flex items-center justify-center rounded-lg transition"><span class="text-base">👤</span></div>
+          <span class="text-[10px] font-medium">โปรไฟล์</span>
+        </button>
+      </div>
+    </nav>
+  </div><!-- end main-app -->
+
+</div><!-- end app-root -->
+
+<!-- ===== MODALS ===== -->
+
+<!-- Add Word Modal -->
+<div id="modal-add-word" class="fixed inset-0 z-50 modal-overlay flex items-end hidden" onclick="closeModalOnOverlay(event,'modal-add-word')">
+  <div class="w-full max-w-md mx-auto bg-white rounded-t-3xl p-5 fade-in-up">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-bold text-gray-900">➕ เพิ่มคำในพจนานุกรม</h3>
+      <button onclick="closeModal('modal-add-word')" class="text-muted hover:text-gray-900 text-xl">✕</button>
+    </div>
+    <div class="space-y-3">
+      <input type="text" id="add-word-th" placeholder="คำภาษาไทย เช่น สวัสดี" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+      <input type="text" id="add-word-en" placeholder="คำภาษาอังกฤษ เช่น Hello" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+      <input type="text" id="add-word-emoji" placeholder="Emoji เช่น 👋" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+      <select id="add-word-cat" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+        <option value="greeting">ทักทาย</option>
+        <option value="daily">ประจำวัน</option>
+        <option value="emotion">อารมณ์</option>
+        <option value="question">คำถาม</option>
+        <option value="other">อื่นๆ</option>
+      </select>
+      <button onclick="submitAddWord()" class="w-full py-3 bg-primary text-white rounded-xl font-semibold text-sm hover:bg-primary-dark transition">
+        บันทึกลงพจนานุกรม
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear Confirm Modal -->
+<div id="modal-clear" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center hidden" onclick="closeModalOnOverlay(event,'modal-clear')">
+  <div class="bg-white rounded-3xl p-6 mx-4 w-full max-w-xs text-center bounce-in">
+    <div class="text-4xl mb-3">🗑️</div>
+    <h3 class="font-bold text-gray-900 mb-1">ล้างประวัติทั้งหมด?</h3>
+    <p class="text-sm text-muted mb-4">ข้อมูลจะถูกลบออกจากฐานข้อมูลถาวร</p>
+    <div class="flex gap-2">
+      <button onclick="closeModal('modal-clear')" class="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm">ยกเลิก</button>
+      <button onclick="clearHistory()" class="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-medium text-sm hover:bg-red-600 transition">ล้างทั้งหมด</button>
+    </div>
+  </div>
+</div>
+
+<!-- Language Modal -->
+<div id="modal-language" class="fixed inset-0 z-50 modal-overlay flex items-end hidden" onclick="closeModalOnOverlay(event,'modal-language')">
+  <div class="w-full max-w-md mx-auto bg-white rounded-t-3xl p-5 fade-in-up">
+    <h3 class="text-base font-bold text-gray-900 mb-4">🌐 ภาษาที่รองรับ</h3>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between p-3 bg-primary/5 rounded-xl border border-primary/20">
+        <div class="flex items-center gap-3"><span class="text-xl">🇹🇭</span><span class="text-sm font-medium text-gray-900">ภาษาไทย</span></div>
+        <span class="text-xs text-primary font-semibold">✓ ใช้งานอยู่</span>
+      </div>
+      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <div class="flex items-center gap-3"><span class="text-xl">🇬🇧</span><span class="text-sm font-medium text-gray-700">English</span></div>
+        <span class="text-xs text-muted">เร็วๆ นี้</span>
+      </div>
+      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <div class="flex items-center gap-3"><span class="text-xl">🇯🇵</span><span class="text-sm font-medium text-gray-700">日本語</span></div>
+        <span class="text-xs text-muted">เร็วๆ นี้</span>
+      </div>
+    </div>
+    <button onclick="closeModal('modal-language')" class="w-full mt-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm">ปิด</button>
+  </div>
+</div>
+
+<!-- Claude AI Modal -->
+<div id="modal-claude-ai" class="fixed inset-0 z-50 modal-overlay flex items-end hidden" onclick="closeModalOnOverlay(event,'modal-claude-ai')">
+  <div class="w-full max-w-md mx-auto bg-white rounded-t-3xl p-5 fade-in-up" style="max-height:75vh;overflow-y:auto;">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">🤖</span>
+        <h3 class="text-base font-bold text-gray-900">Claude AI — วิเคราะห์ท่ามือ</h3>
+      </div>
+      <button onclick="closeModal('modal-claude-ai')" class="text-muted hover:text-gray-900 text-xl">✕</button>
+    </div>
+    <!-- Current sign being analyzed -->
+    <div class="bg-primary/5 rounded-2xl p-4 mb-4 border border-primary/10">
+      <p class="text-xs text-muted mb-1">ท่ามือที่กำลังวิเคราะห์</p>
+      <p class="text-lg font-bold text-gray-900" id="ai-modal-word">—</p>
+      <p class="text-xs text-muted" id="ai-modal-landmarks">ข้อมูล MediaPipe: รอการตรวจจับ...</p>
+    </div>
+    <!-- AI Response area -->
+    <div id="ai-response-area" class="bg-gray-50 rounded-2xl p-4 mb-4 min-h-[100px] border border-gray-100">
+      <p class="text-sm text-muted text-center" id="ai-response-placeholder">กด "วิเคราะห์" เพื่อให้ Claude AI อธิบายท่ามือนี้</p>
+      <div id="ai-response-text" class="text-sm text-gray-800 leading-relaxed hidden"></div>
+      <!-- Loading -->
+      <div id="ai-loading" class="hidden flex flex-col items-center justify-center gap-2 py-4">
+        <div class="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" style="border-width:3px;"></div>
+        <p class="text-xs text-muted">Claude กำลังวิเคราะห์...</p>
+      </div>
+    </div>
+    <!-- Preset questions -->
+    <div class="mb-4">
+      <p class="text-xs text-muted font-medium mb-2">คำถามด่วน</p>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="quickAskClaude('อธิบายความหมายของท่ามือนี้ในภาษาไทย')" class="phrase-chip text-xs">💬 ความหมาย</button>
+        <button onclick="quickAskClaude('บอกวิธีแสดงท่ามือนี้ทีละขั้นตอน')" class="phrase-chip text-xs">📋 วิธีทำ</button>
+        <button onclick="quickAskClaude('ท่ามือนี้ใช้ในสถานการณ์ไหนบ้าง')" class="phrase-chip text-xs">🎯 การใช้งาน</button>
+        <button onclick="quickAskClaude('มีท่ามือที่คล้ายกันนี้อีกบ้างไหม')" class="phrase-chip text-xs">🔍 ท่าคล้าย</button>
+      </div>
+    </div>
+    <!-- Custom question -->
+    <div class="flex gap-2">
+      <input type="text" id="ai-custom-question" placeholder="ถามอะไรก็ได้เกี่ยวกับท่ามือนี้..." class="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+      <button onclick="sendCustomQuestion()" class="px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-dark transition">ถาม</button>
+    </div>
+    <!-- Free notice -->
+    <div class="mt-3 p-2.5 bg-green-50 rounded-xl border border-green-100 flex items-center gap-2">
+      <span class="text-green-600 text-sm">✅</span>
+      <p class="text-xs text-green-700 font-medium">ฟรี — ไม่ต้องใช้ API Key</p>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none"></div>
+
+<script>
+// ================================================
+//   MANU APP v2.0 — REAL-TIME DATABASE EDITION
+// ================================================
+
+// ===== DATABASE LAYER (localStorage Real-time) =====
+const DB = {
+  KEYS: {
+    history: 'manu_history',
+    dictionary: 'manu_dictionary',
+    users: 'manu_users',
+    currentUser: 'manu_current_user',
+    favorites: 'manu_favorites',
+    settings: 'manu_settings',
+  },
+
+  _listeners: {},
+  _broadcastChannel: null,
+
+  init() {
+    // Use BroadcastChannel for real-time across tabs
+    try {
+      this._broadcastChannel = new BroadcastChannel('manu_db_sync');
+      this._broadcastChannel.onmessage = (e) => {
+        const { key, action } = e.data;
+        this._notify(key);
+      };
+    } catch(e) {
+      // Fallback: storage event
+      window.addEventListener('storage', (e) => {
+        if (e.key && Object.values(this.KEYS).includes(e.key)) {
+          this._notify(e.key);
+        }
+      });
+    }
+    // Init default dictionary if empty
+    if (!localStorage.getItem(this.KEYS.dictionary)) {
+      this.set(this.KEYS.dictionary, defaultDictData);
+    }
+    if (!localStorage.getItem(this.KEYS.history)) {
+      this.set(this.KEYS.history, []);
+    }
+    if (!localStorage.getItem(this.KEYS.favorites)) {
+      this.set(this.KEYS.favorites, []);
+    }
+    if (!localStorage.getItem(this.KEYS.settings)) {
+      this.set(this.KEYS.settings, { darkMode: false, notifications: true });
+    }
+  },
+
+  get(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch(e) { return null; }
+  },
+
+  set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      this._notify(key);
+      // Broadcast to other tabs
+      if (this._broadcastChannel) {
+        this._broadcastChannel.postMessage({ key, action: 'set', ts: Date.now() });
+      }
+      this._updateDbStatus();
+      return true;
+    } catch(e) {
+      if (e.name === 'QuotaExceededError') {
+        showToast('⚠️ หน่วยความจำเต็ม กรุณาล้างข้อมูลเก่า', '#ef4444');
+      }
+      return false;
+    }
+  },
+
+  subscribe(key, callback) {
+    if (!this._listeners[key]) this._listeners[key] = [];
+    this._listeners[key].push(callback);
+    // Immediately call with current data
+    callback(this.get(key));
+  },
+
+  _notify(key) {
+    (this._listeners[key] || []).forEach(cb => {
+      try { cb(this.get(key)); } catch(e) {}
+    });
+  },
+
+  _updateDbStatus() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const el = document.getElementById('db-last-update');
+    if (el) el.textContent = timeStr;
+    
+    const hist = this.get(this.KEYS.history) || [];
+    const dict = this.get(this.KEYS.dictionary) || [];
+    const hcEl = document.getElementById('db-history-count');
+    const dcEl = document.getElementById('db-dict-count');
+    if (hcEl) hcEl.textContent = hist.length + ' รายการ';
+    if (dcEl) dcEl.textContent = dict.length + ' คำ';
+  }
+};
+
+// ===== DEFAULT DATA =====
+const defaultDictData = [
+  { id:'d1', emoji:'👋', th:'สวัสดี', en:'Hello', cat:'greeting', letter:'ส', added: Date.now() },
+  { id:'d2', emoji:'🙏', th:'ขอบคุณ', en:'Thank you', cat:'daily', letter:'ข', added: Date.now() },
+  { id:'d3', emoji:'❤️', th:'รัก', en:'Love', cat:'emotion', letter:'ร', added: Date.now() },
+  { id:'d4', emoji:'🍽️', th:'กิน', en:'Eat', cat:'daily', letter:'ก', added: Date.now() },
+  { id:'d5', emoji:'💧', th:'น้ำ', en:'Water', cat:'daily', letter:'น', added: Date.now() },
+  { id:'d6', emoji:'😊', th:'ดีใจ', en:'Happy', cat:'emotion', letter:'ด', added: Date.now() },
+  { id:'d7', emoji:'🏠', th:'บ้าน', en:'Home', cat:'daily', letter:'บ', added: Date.now() },
+  { id:'d8', emoji:'👨‍👩‍👧', th:'ครอบครัว', en:'Family', cat:'daily', letter:'ค', added: Date.now() },
+  { id:'d9', emoji:'📚', th:'เรียน', en:'Study', cat:'daily', letter:'ร', added: Date.now() },
+  { id:'d10', emoji:'🤝', th:'ช่วย', en:'Help', cat:'daily', letter:'ช', added: Date.now() },
+  { id:'d11', emoji:'🌙', th:'นอน', en:'Sleep', cat:'daily', letter:'น', added: Date.now() },
+  { id:'d12', emoji:'☀️', th:'ตื่น', en:'Wake up', cat:'daily', letter:'ต', added: Date.now() },
+  { id:'d13', emoji:'😢', th:'เสียใจ', en:'Sad', cat:'emotion', letter:'เ', added: Date.now() },
+  { id:'d14', emoji:'❓', th:'อะไร?', en:'What?', cat:'question', letter:'อ', added: Date.now() },
+  { id:'d15', emoji:'🎓', th:'ศึกษา', en:'Education', cat:'daily', letter:'ศ', added: Date.now() },
+  { id:'d16', emoji:'🆘', th:'ช่วยด้วย', en:'Help me', cat:'daily', letter:'ช', added: Date.now() },
+  { id:'d17', emoji:'✅', th:'ใช่', en:'Yes', cat:'question', letter:'ใ', added: Date.now() },
+  { id:'d18', emoji:'❌', th:'ไม่', en:'No', cat:'question', letter:'ไ', added: Date.now() },
+];
+
+// ===== APP STATE =====
+let currentUser = null;
+let isDarkMode = false;
+let notifEnabled = true;
+let activeTab = 'translate';
+let historyFilter = 'all';
+let dictCat = 'all';
+let currentWord = { th:'สวัสดี', en:'Hello', cat:'greeting', emoji:'👋' };
+
+// ===== CATEGORY HELPERS =====
+const CAT_NAMES = { greeting:'ทักทาย', daily:'ประจำวัน', emotion:'อารมณ์', question:'คำถาม', other:'อื่นๆ' };
+const CAT_COLORS = {
+  greeting: 'bg-blue-100 text-blue-700',
+  daily: 'bg-green-100 text-green-700',
+  emotion: 'bg-pink-100 text-pink-700',
+  question: 'bg-amber-100 text-amber-700',
+  other: 'bg-gray-100 text-gray-700'
+};
+
+// ===== AUTH =====
+function toggleAuth(view) {
+  document.getElementById('sub-page-login').classList.toggle('hidden', view === 'register');
+  document.getElementById('sub-page-register').classList.toggle('hidden', view === 'login');
+}
+
+function handleLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!username) { showToast('กรุณาใส่อีเมล / ชื่อผู้ใช้', '#ef4444'); return; }
+  if (password.length < 6) { showToast('รหัสผ่านต้องมีอย่างน้อย 6 ตัว', '#ef4444'); return; }
+
+  const users = DB.get(DB.KEYS.users) || {};
+  const userId = username.toLowerCase().replace(/[^a-z0-9]/g,'_');
+  
+  if (!users[userId]) {
+    // Auto register
+    users[userId] = { name: username.split('@')[0], email: username, password, joinDate: Date.now(), avatarEmoji: '🤟' };
+    DB.set(DB.KEYS.users, users);
+  }
+  
+  if (users[userId].password !== password) {
+    showToast('รหัสผ่านไม่ถูกต้อง', '#ef4444'); return;
+  }
+
+  currentUser = { ...users[userId], id: userId };
+  DB.set(DB.KEYS.currentUser, currentUser);
+  loginSuccess();
+}
+
+function handleRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  if (!name || !email || !password) { showToast('กรุณากรอกข้อมูลให้ครบ', '#ef4444'); return; }
+  if (password.length < 6) { showToast('รหัสผ่านต้องมีอย่างน้อย 6 ตัว', '#ef4444'); return; }
+
+  const users = DB.get(DB.KEYS.users) || {};
+  const userId = email.toLowerCase().replace(/[^a-z0-9]/g,'_');
+  if (users[userId]) { showToast('อีเมลนี้มีอยู่แล้ว', '#ef4444'); return; }
+
+  users[userId] = { name, email, password, joinDate: Date.now(), avatarEmoji: '🤟' };
+  DB.set(DB.KEYS.users, users);
+
+  document.getElementById('login-username').value = email;
+  document.getElementById('login-password').value = password;
+  toggleAuth('login');
+  showToast('✅ สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ', '#10b981');
+}
+
+function quickDemo() {
+  document.getElementById('login-username').value = 'demo@manu.app';
+  document.getElementById('login-password').value = 'demo123';
+  handleLogin();
+}
+
+function loginSuccess() {
+  document.getElementById('auth-container').classList.add('hidden');
+  document.getElementById('main-app').classList.remove('hidden');
+  updateProfileUI();
+  updateStats();
+  switchTab('translate');
+  showToast('✅ เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ!', '#10b981');
+  startConfidenceAnimation();
+  startSignDemo();
+}
+
+function handleLogout() {
+  DB.set(DB.KEYS.currentUser, null);
+  currentUser = null;
+  document.getElementById('main-app').classList.add('hidden');
+  document.getElementById('auth-container').classList.remove('hidden');
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  toggleAuth('login');
+  showToast('ออกจากระบบแล้ว', '#374151');
+}
+
+// ===== PROFILE UI =====
+function updateProfileUI() {
+  if (!currentUser) return;
+  const joinDate = new Date(currentUser.joinDate).toLocaleDateString('th-TH', { year:'numeric', month:'short', day:'numeric' });
+  document.getElementById('profile-name').textContent = currentUser.name;
+  document.getElementById('profile-email').textContent = currentUser.email;
+  document.getElementById('profile-join-date').textContent = joinDate;
+  document.getElementById('profile-avatar-emoji').textContent = currentUser.avatarEmoji || '🤟';
+}
+
+function updateStats() {
+  const history = DB.get(DB.KEYS.history) || [];
+  const favs = DB.get(DB.KEYS.favorites) || [];
+  const today = new Date().toDateString();
+  const todayCount = history.filter(h => new Date(h.timestamp).toDateString() === today).length;
+
+  document.getElementById('stat-words').textContent = history.length;
+  document.getElementById('stat-fav').textContent = favs.length;
+  document.getElementById('hist-total').textContent = history.length;
+  document.getElementById('hist-fav').textContent = favs.length;
+  document.getElementById('hist-today').textContent = todayCount;
+
+  // Streak (simple: count consecutive days)
+  const days = [...new Set(history.map(h => new Date(h.timestamp).toDateString()))];
+  document.getElementById('stat-streak').textContent = Math.min(days.length, 99);
+  
+  DB._updateDbStatus();
+}
+
+// ===== TABS =====
+function switchTab(tab) {
+  activeTab = tab;
+  const pages = ['translate','history','dictionary','profile'];
+  pages.forEach(p => {
+    const el = document.getElementById('page-'+p);
+    if (el) el.classList.toggle('hidden', p !== tab);
+  });
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const isActive = btn.dataset.tab === tab;
+    btn.classList.toggle('active', isActive);
+    const iconWrap = btn.querySelector('.tab-icon-wrap');
+    if (iconWrap) iconWrap.style.background = isActive ? 'rgba(83,74,183,0.12)' : '';
+  });
+  if (tab === 'history') { renderHistory(); updateStats(); }
+  if (tab === 'dictionary') renderDict();
+  if (tab === 'profile') { updateStats(); updateProfileUI(); }
+  // Clear badge
+  if (tab === 'history') document.getElementById('history-badge').classList.add('hidden');
+}
+
+// ===== TRANSLATE FEATURES =====
+const signDemoWords = [
+  { th:'สวัสดี', en:'Hello', cat:'greeting', emoji:'👋', conf:94 },
+  { th:'ขอบคุณ', en:'Thank you', cat:'daily', emoji:'🙏', conf:91 },
+  { th:'รัก', en:'Love', cat:'emotion', emoji:'❤️', conf:88 },
+  { th:'ดีใจ', en:'Happy', cat:'emotion', emoji:'😊', conf:96 },
+  { th:'ช่วย', en:'Help', cat:'daily', emoji:'🤝', conf:89 },
+  { th:'บ้าน', en:'Home', cat:'daily', emoji:'🏠', conf:92 },
+];
+let demoInterval = null;
+let demoIdx = 0;
+
+function startSignDemo() {
+  if (demoInterval) clearInterval(demoInterval);
+  demoInterval = setInterval(() => {
+    demoIdx = (demoIdx + 1) % signDemoWords.length;
+    const w = signDemoWords[demoIdx];
+    currentWord = { th: w.th, en: w.en, cat: w.cat, emoji: w.emoji };
+    document.getElementById('cam-emoji').textContent = w.emoji;
+    const labelEl = document.getElementById('cam-label');
+    if (labelEl) labelEl.textContent = w.th;
+    document.getElementById('result-th').textContent = w.th;
+    document.getElementById('result-en').textContent = `${w.en} · ${CAT_NAMES[w.cat] || w.cat}`;
+    animateConfidence(w.conf);
+  }, 3000);
+}
+
+// ===== CAMERA (WebRTC + MediaPipe) =====
+let cameraStream = null;
+let facingMode = 'user';
+let mpHands = null;
+let mpCamera = null;
+let lastLandmarks = null;
+let aiAnalysisTimeout = null;
+let handDetectedCount = 0;
+
+// เริ่ม MediaPipe Hands
+async function initMediaPipe() {
+  if (mpHands) return; // โหลดแล้ว
+  try {
+    mpHands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    mpHands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.5
+    });
+    mpHands.onResults(onHandResults);
+    setAiStatus('MediaPipe โหลดสำเร็จ ✓');
+  } catch(e) {
+    console.warn('MediaPipe init failed:', e);
+    mpHands = null;
+  }
+}
+
+function onHandResults(results) {
+  const canvas = document.getElementById('mediapipe-canvas');
+  const video = document.getElementById('cam-video');
+  if (!canvas || !video) return;
+
+  // ตั้งขนาด canvas ให้ตรงกับ video
+  canvas.width = video.videoWidth || canvas.offsetWidth;
+  canvas.height = video.videoHeight || canvas.offsetHeight;
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    lastLandmarks = results.multiHandLandmarks;
+    handDetectedCount++;
+
+    for (const landmarks of results.multiHandLandmarks) {
+      // วาด connections
+      drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: 'rgba(83,74,183,0.7)', lineWidth: 2 });
+      // วาด landmark points
+      drawLandmarks(ctx, landmarks, { color: '#7B73D1', fillColor: 'rgba(255,255,255,0.9)', lineWidth: 1, radius: 4 });
+    }
+
+    // ทุก 3 วินาที ส่งไปวิเคราะห์อัตโนมัติ
+    if (handDetectedCount % 90 === 0) {
+      autoAnalyzeHand(results.multiHandLandmarks[0]);
+    }
+
+  } else {
+    lastLandmarks = null;
+    // ไม่เจอมือ
+  }
+}
+
+function landmarksToFeatures(landmarks) {
+  // แปลง landmarks เป็น feature string ที่ส่งให้ AI
+  const tips = [4, 8, 12, 16, 20]; // นิ้วหัวแม่มือ, ชี้, กลาง, นาง, ก้อย
+  const mcp  = [2, 5,  9, 13, 17]; // knuckle
+  const wrist = landmarks[0];
+
+  const extended = tips.map((tip, i) => {
+    const dy = landmarks[tip].y - landmarks[mcp[i]].y;
+    return dy < -0.04; // นิ้วชี้ขึ้น = extended
+  });
+
+  const names = ['หัวแม่มือ','นิ้วชี้','นิ้วกลาง','นิ้วนาง','นิ้วก้อย'];
+  const extStr = extended.map((e, i) => `${names[i]}:${e?'ชี้ขึ้น':'งอ'}`).join(', ');
+
+  // คำนวณมุมกำมือ (rough)
+  const palmSize = Math.hypot(
+    landmarks[5].x - landmarks[17].x,
+    landmarks[5].y - landmarks[17].y
+  );
+
+  return {
+    fingers: extStr,
+    extendedCount: extended.filter(Boolean).length,
+    palmSize: palmSize.toFixed(3),
+    wristPos: `x:${wrist.x.toFixed(2)},y:${wrist.y.toFixed(2)}`
+  };
+}
+
+async function autoAnalyzeHand(landmarks) {
+  if (!landmarks) return;
+  const features = landmarksToFeatures(landmarks);
+  const word = await classifyHandSign(features);
+  if (word) {
+    updateDetectedWord(word);
+  }
+}
+
+// จำแนกท่ามือจาก features (rule-based + AI fallback)
+async function classifyHandSign(features) {
+  const n = features.extendedCount;
+  // Rule-based สำหรับท่าพื้นฐาน
+  const rulesMap = {
+    5: { th:'สวัสดี', en:'Hello', cat:'greeting', emoji:'👋', conf: 88 },
+    0: { th:'หยุด/ไม่', en:'Stop/No', cat:'question', emoji:'✊', conf: 82 },
+    1: { th:'ใช่/หนึ่ง', en:'Yes/One', cat:'question', emoji:'☝️', conf: 79 },
+    2: { th:'สอง/ชนะ', en:'Two/Victory', cat:'daily', emoji:'✌️', conf: 85 },
+    3: { th:'สาม', en:'Three', cat:'daily', emoji:'🤟', conf: 76 },
+    4: { th:'สี่', en:'Four', cat:'daily', emoji:'🖖', conf: 74 },
+  };
+
+  const match = rulesMap[n];
+  if (match) return match;
+  return null;
+}
+
+async function startCamera() {
+  try {
+    const constraints = {
+      video: { facingMode, width:{ ideal:1280 }, height:{ ideal:720 } },
+      audio: false
+    };
+    cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+    const video = document.getElementById('cam-video');
+    video.srcObject = cameraStream;
+    video.style.display = 'block';
+    video.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+
+    document.getElementById('mediapipe-canvas').style.display = 'block';
+    document.getElementById('mediapipe-canvas').style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+    document.getElementById('cam-placeholder').style.display = 'none';
+    document.getElementById('cam-overlay').style.display = 'block';
+    document.getElementById('btn-flip-cam').style.display = 'flex';
+    document.getElementById('btn-stop-cam').style.display = 'flex';
+
+    const liveBadge = document.getElementById('live-badge');
+    liveBadge.style.cssText = '';
+    liveBadge.style.display = 'flex';
+
+    const aiStatusBadge = document.getElementById('ai-status-badge');
+    aiStatusBadge.style.cssText = '';
+    aiStatusBadge.style.display = 'flex';
+
+    showToast('📷 เปิดกล้องสำเร็จ', '#10b981');
+
+    // โหลด MediaPipe และเริ่มประมวลผล
+    await initMediaPipe();
+    startMediaPipeProcessing(video);
+
+    if (demoInterval) { clearInterval(demoInterval); demoInterval = null; }
+
+  } catch (err) {
+    let msg = '❌ ไม่สามารถเปิดกล้องได้';
+    if (err.name === 'NotAllowedError') msg = '❌ กรุณาอนุญาตการใช้กล้องในเบราว์เซอร์';
+    else if (err.name === 'NotFoundError') msg = '❌ ไม่พบกล้องในอุปกรณ์นี้';
+    else if (err.name === 'NotSupportedError') msg = '❌ เบราว์เซอร์นี้ไม่รองรับกล้อง';
+    showToast(msg, '#ef4444');
+    // fallback กลับ demo mode
+    startSignDemo();
+  }
+}
+
+function startMediaPipeProcessing(video) {
+  if (!mpHands) {
+    // ถ้า MediaPipe โหลดไม่สำเร็จ ใช้ demo mode
+    startSignDemo();
+    setAiStatus('ใช้โหมด Demo');
+    return;
+  }
+
+  // ใช้ requestAnimationFrame loop ส่งเฟรมให้ MediaPipe
+  async function processFrame() {
+    if (!cameraStream) return;
+    if (video.readyState >= 2) {
+      try {
+        await mpHands.send({ image: video });
+      } catch(e) { /* ignore frame errors */ }
+    }
+    requestAnimationFrame(processFrame);
+  }
+  processFrame();
+  setAiStatus('MediaPipe กำลังทำงาน 🟢');
+}
+
+function setAiStatus(text) {
+  const el = document.getElementById('ai-status-text');
+  if (el) el.textContent = text;
+}
+
+function updateDetectedWord(word) {
+  currentWord = { th: word.th, en: word.en, cat: word.cat, emoji: word.emoji };
+  document.getElementById('cam-emoji').textContent = word.emoji;
+  const labelEl = document.getElementById('cam-label');
+  if (labelEl) labelEl.textContent = word.th;
+  document.getElementById('result-th').textContent = word.th;
+  document.getElementById('result-en').textContent = `${word.en} · ${CAT_NAMES[word.cat] || word.cat}`;
+  animateConfidence(word.conf || 80 + Math.floor(Math.random()*15));
+}
+
+async function flipCamera() {
+  // สลับกล้องหน้า/หลัง
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  await startCamera();
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  if (demoInterval) { clearInterval(demoInterval); demoInterval = null; }
+  lastLandmarks = null;
+  handDetectedCount = 0;
+
+  const video = document.getElementById('cam-video');
+  video.srcObject = null;
+  video.style.display = 'none';
+
+  const canvas = document.getElementById('mediapipe-canvas');
+  canvas.style.display = 'none';
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  document.getElementById('cam-placeholder').style.display = 'flex';
+  document.getElementById('cam-overlay').style.display = 'none';
+  document.getElementById('btn-flip-cam').style.display = 'none';
+  document.getElementById('btn-stop-cam').style.display = 'none';
+  document.getElementById('live-badge').style.cssText = 'display:none!important;';
+  document.getElementById('ai-status-badge').style.cssText = 'display:none!important;';
+  showToast('⏹️ ปิดกล้องแล้ว');
+  // กลับ demo mode
+  startSignDemo();
+}
+
+// เมื่อออกจากหน้า translate ให้หยุดกล้อง (optional: ไม่หยุดก็ได้ถ้าอยากให้ค้าง)
+function flipCamSign() {
+  // ถ้ากล้องเปิดอยู่ให้ flip, ถ้าไม่เปิดให้ demo
+  if (cameraStream) { flipCamera(); return; }
+  demoIdx = (demoIdx + 1) % signDemoWords.length;
+  const w = signDemoWords[demoIdx];
+  currentWord = { th: w.th, en: w.en, cat: w.cat, emoji: w.emoji };
+  document.getElementById('cam-emoji').textContent = w.emoji;
+  document.getElementById('result-th').textContent = w.th;
+  document.getElementById('result-en').textContent = `${w.en} · ${CAT_NAMES[w.cat] || w.cat}`;
+  animateConfidence(w.conf);
+}
+
+function animateConfidence(target) {
+  const fill = document.getElementById('conf-fill');
+  const pct = document.getElementById('conf-pct');
+  let cur = parseInt(fill.style.width) || 50;
+  const step = () => {
+    cur += (target - cur) * 0.15;
+    fill.style.width = cur + '%';
+    pct.textContent = Math.round(cur) + '%';
+    if (Math.abs(target - cur) > 0.5) requestAnimationFrame(step);
+    else { fill.style.width = target + '%'; pct.textContent = target + '%'; }
+  };
+  requestAnimationFrame(step);
+}
+
+function startConfidenceAnimation() { animateConfidence(94); }
+
+function selectPhrase(th, en, cat) {
+  currentWord = { th, en, cat };
+  document.getElementById('result-th').textContent = th;
+  document.getElementById('result-en').textContent = `${en} · ${CAT_NAMES[cat] || cat}`;
+  animateConfidence(85 + Math.floor(Math.random() * 12));
+}
+
+function speakWord() {
+  const text = document.getElementById('result-th').textContent;
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'th-TH';
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    showToast('🔊 กำลังพูด: ' + text);
+  }
+}
+
+function copyWord() {
+  const text = document.getElementById('result-th').textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('📋 คัดลอกแล้ว: ' + text));
+}
+
+function shareWord() {
+  const th = document.getElementById('result-th').textContent;
+  const en = document.getElementById('result-en').textContent;
+  if (navigator.share) {
+    navigator.share({ title:'Manu — ภาษามือ', text:`${th} (${en})` });
+  } else {
+    navigator.clipboard.writeText(`${th} (${en})`).then(() => showToast('↗️ คัดลอกเพื่อแชร์แล้ว'));
+  }
+}
+
+function saveCurrentWord() {
+  const th = currentWord.th;
+  const en = currentWord.en;
+  const cat = currentWord.cat || 'daily';
+  
+  const history = DB.get(DB.KEYS.history) || [];
+  const exists = history.find(h => h.word === th);
+  if (exists) { showToast('⚠️ บันทึกคำนี้แล้ว'); return; }
+  if (history.length >= 999) { showToast('⚠️ ถึงขีดจำกัด 999 รายการ', '#ef4444'); return; }
+
+  history.unshift({ id: Date.now().toString(), word: th, english: en, category: cat, timestamp: new Date().toISOString(), favorite: false });
+  DB.set(DB.KEYS.history, history);
+  updateStats();
+  showToast('🔖 บันทึกแล้ว: ' + th, '#10b981');
+  // Show badge if not on history tab
+  if (activeTab !== 'history') {
+    document.getElementById('history-badge').classList.remove('hidden');
+  }
+}
+
+function addToFavorite() {
+  const th = currentWord.th;
+  const favs = DB.get(DB.KEYS.favorites) || [];
+  const idx = favs.indexOf(th);
+  const icon = document.getElementById('fav-icon');
+  if (idx > -1) {
+    favs.splice(idx,1);
+    icon.textContent = '⭐';
+    showToast('ลบออกจากรายการโปรดแล้ว');
+  } else {
+    favs.push(th);
+    icon.textContent = '🌟';
+    showToast('⭐ เพิ่มในรายการโปรดแล้ว', '#f59e0b');
+  }
+  DB.set(DB.KEYS.favorites, favs);
+  updateStats();
+}
+
+// ===== HISTORY =====
+function setHistoryFilter(filter, btn) {
+  historyFilter = filter;
+  document.querySelectorAll('#history-filters button').forEach(b => {
+    b.className = 'category-badge bg-gray-100 text-gray-700 whitespace-nowrap';
+  });
+  btn.className = 'category-badge bg-primary text-white whitespace-nowrap';
+  renderHistory();
+}
+
+function onHistorySearch() { renderHistory(); }
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (!list) return;
+  
+  let items = DB.get(DB.KEYS.history) || [];
+  const favs = DB.get(DB.KEYS.favorites) || [];
+  const search = document.getElementById('history-search')?.value || '';
+
+  if (historyFilter === 'favorite') {
+    items = items.filter(i => favs.includes(i.word));
+  } else if (historyFilter !== 'all') {
+    items = items.filter(i => i.category === historyFilter);
+  }
+  if (search) items = items.filter(i => i.word.includes(search) || i.english.toLowerCase().includes(search.toLowerCase()));
+  items.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  if (items.length === 0) {
+    list.innerHTML = `
+      <div class="flex flex-col items-center justify-center h-48 text-center fade-in-up">
+        <span class="text-4xl mb-3">📭</span>
+        <p class="text-muted text-sm">ยังไม่มีข้อมูล</p>
+        <p class="text-xs text-muted mt-1">แปลและบันทึกคำเพื่อดูที่นี่</p>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = items.map((item, i) => {
+    const date = new Date(item.timestamp);
+    const now = new Date();
+    const diff = now - date;
+    const mins = Math.floor(diff/60000);
+    const hours = Math.floor(diff/3600000);
+    const days = Math.floor(diff/86400000);
+    let timeStr = mins < 1 ? 'เพิ่งเดี๋ยว' : mins < 60 ? `${mins} นาทีที่แล้ว` : hours < 24 ? `${hours} ชม.ที่แล้ว` : days === 1 ? 'เมื่อวาน' : `${days} วันที่แล้ว`;
+    const isFav = favs.includes(item.word);
+    return `
+      <div class="history-card flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm border border-gray-100 fade-in-up" style="animation-delay:${i*0.03}s">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-gray-900 truncate">${item.word}</span>
+            <span class="category-badge ${CAT_COLORS[item.category] || 'bg-gray-100 text-gray-700'} flex-shrink-0">${CAT_NAMES[item.category] || item.category}</span>
+          </div>
+          <p class="text-xs text-muted mt-0.5">${item.english} · ${timeStr}</p>
+        </div>
+        <div class="flex gap-1 flex-shrink-0">
+          <button onclick="toggleFavItem('${item.id}','${item.word}')" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-amber-50 transition text-base" title="รายการโปรด">
+            ${isFav ? '🌟' : '☆'}
+          </button>
+          <button onclick="speakItem('${item.word}')" class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition text-sm" title="ฟัง">
+            🔊
+          </button>
+          <button onclick="deleteHistoryItem('${item.id}')" class="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition text-sm" title="ลบ">
+            🗑️
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleFavItem(id, word) {
+  const favs = DB.get(DB.KEYS.favorites) || [];
+  const idx = favs.indexOf(word);
+  if (idx > -1) favs.splice(idx,1); else favs.push(word);
+  DB.set(DB.KEYS.favorites, favs);
+  updateStats();
+  renderHistory();
+  showToast(idx > -1 ? 'ลบออกจากโปรดแล้ว' : '⭐ เพิ่มในโปรดแล้ว', idx > -1 ? '#374151' : '#f59e0b');
+}
+
+function deleteHistoryItem(id) {
+  let history = DB.get(DB.KEYS.history) || [];
+  history = history.filter(h => h.id !== id);
+  DB.set(DB.KEYS.history, history);
+  updateStats();
+  renderHistory();
+  showToast('ลบรายการแล้ว');
+}
+
+function speakItem(word) {
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(word);
+    u.lang = 'th-TH';
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+}
+
+function showClearConfirm() { showModal('modal-clear'); }
+
+function clearHistory() {
+  DB.set(DB.KEYS.history, []);
+  DB.set(DB.KEYS.favorites, []);
+  closeModal('modal-clear');
+  updateStats();
+  renderHistory();
+  showToast('🗑️ ล้างประวัติทั้งหมดแล้ว');
+}
+
+// ===== DICTIONARY =====
+function setDictCat(cat, btn) {
+  dictCat = cat;
+  document.querySelectorAll('#dict-cat-filter button').forEach(b => {
+    b.className = 'category-badge bg-gray-100 text-gray-700 whitespace-nowrap';
+  });
+  btn.className = 'category-badge bg-primary text-white whitespace-nowrap';
+  renderDict();
+}
+
+function renderDict() {
+  const list = document.getElementById('dict-list');
+  if (!list) return;
+  const search = document.getElementById('dict-search')?.value || '';
+  let items = DB.get(DB.KEYS.dictionary) || [];
+  
+  if (dictCat !== 'all') items = items.filter(i => i.cat === dictCat);
+  if (search) items = items.filter(i => i.th.includes(search) || i.en.toLowerCase().includes(search.toLowerCase()));
+  
+  if (items.length === 0) {
+    list.innerHTML = `<div class="flex flex-col items-center justify-center h-48 text-center"><span class="text-4xl mb-3">📚</span><p class="text-muted text-sm">ไม่พบคำที่ค้นหา</p></div>`;
+    return;
+  }
+
+  list.innerHTML = items.map((item,i) => `
+    <div class="flex items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-gray-100 fade-in-up" style="animation-delay:${i*0.025}s">
+      <div class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl flex-shrink-0">${item.emoji}</div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-gray-900">${item.th}</p>
+        <p class="text-xs text-muted">${item.en}</p>
+        <span class="category-badge ${CAT_COLORS[item.cat] || 'bg-gray-100 text-gray-700'} inline-block mt-1">${CAT_NAMES[item.cat] || item.cat}</span>
+      </div>
+      <div class="flex gap-1 flex-shrink-0">
+        <button onclick="selectPhraseFromDict('${item.th}','${item.en}','${item.cat}')" class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition text-sm" title="ใช้คำนี้">
+          ▶
+        </button>
+        <button onclick="deleteDictItem('${item.id}')" class="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition text-sm" title="ลบ">
+          🗑️
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function selectPhraseFromDict(th, en, cat) {
+  currentWord = { th, en, cat };
+  switchTab('translate');
+  selectPhrase(th, en, cat);
+}
+
+function showAddWordModal() { showModal('modal-add-word'); }
+
+function submitAddWord() {
+  const th = document.getElementById('add-word-th').value.trim();
+  const en = document.getElementById('add-word-en').value.trim();
+  const emoji = document.getElementById('add-word-emoji').value.trim() || '📌';
+  const cat = document.getElementById('add-word-cat').value;
+  if (!th || !en) { showToast('กรุณากรอกคำภาษาไทยและอังกฤษ', '#ef4444'); return; }
+
+  const dict = DB.get(DB.KEYS.dictionary) || [];
+  if (dict.find(d => d.th === th)) { showToast('มีคำนี้แล้วในพจนานุกรม', '#ef4444'); return; }
+  
+  dict.push({ id:'u_'+Date.now(), emoji, th, en, cat, letter: th[0], added: Date.now() });
+  DB.set(DB.KEYS.dictionary, dict);
+  closeModal('modal-add-word');
+  renderDict();
+  showToast('✅ เพิ่มคำแล้ว: ' + th, '#10b981');
+  // Clear form
+  ['add-word-th','add-word-en','add-word-emoji'].forEach(id => document.getElementById(id).value = '');
+  DB._updateDbStatus();
+}
+
+function deleteDictItem(id) {
+  let dict = DB.get(DB.KEYS.dictionary) || [];
+  dict = dict.filter(d => d.id !== id);
+  DB.set(DB.KEYS.dictionary, dict);
+  renderDict();
+  showToast('ลบคำแล้ว');
+}
+
+// ===== SETTINGS =====
+function toggleDark() {
+  isDarkMode = !isDarkMode;
+  document.getElementById('app-body').classList.toggle('dark-mode', isDarkMode);
+  document.getElementById('app-root').classList.toggle('dark-mode', isDarkMode);
+  document.getElementById('dark-icon').textContent = isDarkMode ? '☀️' : '🌙';
+  const settings = DB.get(DB.KEYS.settings) || {};
+  settings.darkMode = isDarkMode;
+  DB.set(DB.KEYS.settings, settings);
+  showToast(isDarkMode ? '🌙 โหมดมืดเปิดแล้ว' : '☀️ โหมดปกติ');
+}
+
+function toggleNotif(e) {
+  e.stopPropagation();
+  notifEnabled = !notifEnabled;
+  const bg = document.getElementById('notif-toggle-bg');
+  const knob = document.getElementById('notif-toggle-knob');
+  bg.style.background = notifEnabled ? '#534AB7' : '#d1d5db';
+  knob.style.right = notifEnabled ? '2px' : '';
+  knob.style.left = notifEnabled ? '' : '2px';
+  showToast(notifEnabled ? '🔔 เปิดการแจ้งเตือนแล้ว' : '🔕 ปิดการแจ้งเตือนแล้ว');
+}
+
+function showLanguageModal() { showModal('modal-language'); }
+function showNotifSettings() {}
+
+function exportData() {
+  const data = {
+    history: DB.get(DB.KEYS.history) || [],
+    dictionary: DB.get(DB.KEYS.dictionary) || [],
+    favorites: DB.get(DB.KEYS.favorites) || [],
+    exportedAt: new Date().toISOString(),
+    version: '2.0'
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `manu_backup_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('📤 ส่งออกข้อมูลสำเร็จ', '#10b981');
+}
+
+// ===== MODALS =====
+function showModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function closeModalOnOverlay(e, id) {
+  if (e.target.id === id) closeModal(id);
+}
+
+// ===== TOAST =====
+function showToast(message, bgColor = '#1f2937') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.style.cssText = `background:${bgColor};color:white;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);animation:fadeInUp 0.25s ease;pointer-events:none;white-space:nowrap;`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity='0'; toast.style.transition='opacity 0.3s'; setTimeout(()=>toast.remove(),300); }, 2200);
+}
+
+// ===== CLAUDE AI (Free — ใช้ผ่าน Artifact ไม่ต้องมี API Key) =====
+
+function showApiKeyModal() {
+  showToast('✅ ไม่ต้องใช้ API Key — ฟรีทั้งหมด!', '#10b981');
+}
+
+function saveApiKey() {}
+
+function updateApiKeyStatus() {
+  const el = document.getElementById('api-key-status');
+  if (el) el.textContent = '✓ ฟรี ไม่ต้องตั้งค่า';
+}
+
+function askClaudeAboutSign() {
+  const wordEl = document.getElementById('ai-modal-word');
+  const landmarkEl = document.getElementById('ai-modal-landmarks');
+
+  if (wordEl) wordEl.textContent = currentWord.th + ' (' + currentWord.en + ')';
+
+  if (lastLandmarks && lastLandmarks[0]) {
+    const features = landmarksToFeatures(lastLandmarks[0]);
+    if (landmarkEl) landmarkEl.textContent = `นิ้ว: ${features.extendedCount} นิ้วชี้ขึ้น | ${features.fingers}`;
+  } else {
+    if (landmarkEl) landmarkEl.textContent = 'ข้อมูล MediaPipe: ไม่มีมือในเฟรม (ใช้คำที่แปลปัจจุบัน)';
+  }
+
+  document.getElementById('ai-response-placeholder').classList.remove('hidden');
+  document.getElementById('ai-response-text').classList.add('hidden');
+  document.getElementById('ai-loading').classList.add('hidden');
+
+  showModal('modal-claude-ai');
+}
+
+function quickAskClaude(question) {
+  sendToClaudeAI(question);
+}
+
+function sendCustomQuestion() {
+  const q = document.getElementById('ai-custom-question').value.trim();
+  if (!q) { showToast('กรุณาพิมพ์คำถาม', '#ef4444'); return; }
+  document.getElementById('ai-custom-question').value = '';
+  sendToClaudeAI(q);
+}
+
+async function sendToClaudeAI(userQuestion) {
+  document.getElementById('ai-response-placeholder').classList.add('hidden');
+  document.getElementById('ai-response-text').classList.add('hidden');
+  document.getElementById('ai-loading').classList.remove('hidden');
+
+  let handContext = '';
+  if (lastLandmarks && lastLandmarks[0]) {
+    const f = landmarksToFeatures(lastLandmarks[0]);
+    handContext = `ข้อมูลท่ามือจาก MediaPipe Hands:\n- นิ้วที่ชี้ขึ้น ${f.extendedCount} นิ้ว\n- รายละเอียด: ${f.fingers}\n- ขนาดฝ่ามือ: ${f.palmSize}`;
+  }
+
+  const systemPrompt = `คุณเป็นผู้เชี่ยวชาญด้านภาษามือไทย (Thai Sign Language - TSL) และ American Sign Language (ASL) ที่ช่วยวิเคราะห์ท่ามือจากข้อมูล MediaPipe Hands landmark ตอบเป็นภาษาไทยเสมอ กระชับ ชัดเจน และเป็นประโยชน์`;
+
+  const userMessage = `ท่ามือปัจจุบันที่ระบบตรวจจับได้: "${currentWord.th}" (${currentWord.en})
+${handContext}
+
+คำถาม: ${userQuestion}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }]
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || 'API Error');
+
+    const text = data.content?.[0]?.text || 'ไม่มีคำตอบ';
+    document.getElementById('ai-loading').classList.add('hidden');
+    const responseEl = document.getElementById('ai-response-text');
+    responseEl.textContent = text;
+    responseEl.classList.remove('hidden');
+
+  } catch(err) {
+    document.getElementById('ai-loading').classList.add('hidden');
+    const p = document.getElementById('ai-response-placeholder');
+    p.classList.remove('hidden');
+    p.textContent = '❌ เกิดข้อผิดพลาด: ' + (err.message || 'ไม่สามารถเชื่อมต่อได้');
+    showToast('❌ Claude API Error', '#ef4444');
+  }
+}
+
+// ===== INIT =====
+(function init() {
+  DB.init();
+  
+  // Check saved session
+  const savedUser = DB.get(DB.KEYS.currentUser);
+  if (savedUser && savedUser.email) {
+    currentUser = savedUser;
+    document.getElementById('auth-container').classList.add('hidden');
+    document.getElementById('main-app').classList.remove('hidden');
+    updateProfileUI();
+    updateStats();
+    switchTab('translate');
+    startConfidenceAnimation();
+    startSignDemo();
+  }
+  
+  // Load settings
+  const settings = DB.get(DB.KEYS.settings) || {};
+  if (settings.darkMode) {
+    isDarkMode = true;
+    document.getElementById('app-body').classList.add('dark-mode');
+    document.getElementById('app-root').classList.add('dark-mode');
+    document.getElementById('dark-icon').textContent = '☀️';
+  }
+
+  // Subscribe to real-time updates
+  DB.subscribe(DB.KEYS.history, (data) => {
+    if (activeTab === 'history') renderHistory();
+    updateStats();
+  });
+  DB.subscribe(DB.KEYS.dictionary, () => {
+    if (activeTab === 'dictionary') renderDict();
+    DB._updateDbStatus();
+  });
+  DB.subscribe(DB.KEYS.favorites, () => {
+    updateStats();
+    if (activeTab === 'history') renderHistory();
+  });
+
+  // Update db status every 30s
+  setInterval(() => DB._updateDbStatus(), 30000);
+
+  // อัปเดต API Key status
+  updateApiKeyStatus();
+
+  // Pre-load MediaPipe ในพื้นหลัง
+  setTimeout(() => initMediaPipe(), 2000);
+})();
+</script>
+</body>
+</html>
